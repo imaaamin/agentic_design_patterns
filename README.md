@@ -116,7 +116,8 @@ python routing_googleadk.py
 
 ## 🙏 Acknowledgments
 
-- **Antonio** for writing [Agentic Design Patterns](https://www.amazon.com/Agentic-Design-Patterns-Hands-Intelligent/dp/3032014018) - the inspiration for this learning journey
+- **Mohammad Amin** for mentoring me through this journey
+- **Antonio** for writing [Agentic Design Patterns](https://www.amazon.com/Agentic-Design-Patterns-Hands-Intelligent/dp/3032014018)
 - **Google** for the Agent Development Kit (ADK)
 - **LangChain** team for their excellent framework
 
