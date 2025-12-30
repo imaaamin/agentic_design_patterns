@@ -20,4 +20,6 @@ dependencies = [
     "litellm>=1.80.11",
     "docling>=2.66.0",
     "langchain-docling>=2.0.0",
+    "mcp>=1.25.0",
+    "langchain-mcp-adapters>=0.2.1",
 ]
