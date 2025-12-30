@@ -126,7 +126,7 @@ uv run peer_review_docling_mcp.py paper.pdf
 - Agent autonomously decides tool usage
 - Persistent HTTP connection maintains document cache
 
-#### 2. `peer_review_docling_langgraph.py` - Direct Mode (Recommended)
+#### 2. `peer_review_docling_langgraph.py` - Direct Mode
 
 Uses Docling directly without MCP. More reliable and supports multimodal analysis.
 
