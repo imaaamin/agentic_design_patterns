@@ -22,4 +22,15 @@ dependencies = [
     "langchain-docling>=2.0.0",
     "mcp>=1.25.0",
     "langchain-mcp-adapters>=0.2.1",
+    "pymupdf>=1.26.7",
+    "paddleocr>=3.0.0",
+    "paddlepaddle>=3.0.0",
+    "paddlex[ocr]>=3.0.0",
+    "google-generativeai>=0.8.6",
+    "langfuse>=2.0.0",
+    "openinference-instrumentation-crewai>=0.1.0",
 ]
+
+# Note: After installing, run this to patch paddlex for langchain compatibility:
+# sed -i '' 's/from langchain.docstore.document import Document/from langchain_core.documents import Document/g' .venv/lib/python*/site-packages/paddlex/inference/pipelines/components/retriever/base.py
+# sed -i '' 's/from langchain.text_splitter import RecursiveCharacterTextSplitter/from langchain_text_splitters import RecursiveCharacterTextSplitter/g' .venv/lib/python*/site-packages/paddlex/inference/pipelines/components/retriever/base.py
