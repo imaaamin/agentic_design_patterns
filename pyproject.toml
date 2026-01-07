@@ -29,6 +29,7 @@ dependencies = [
     "google-generativeai>=0.8.6",
     "langfuse>=2.0.0",
     "openinference-instrumentation-crewai>=0.1.0",
+    "crewai-observe>=0.1.0",
 ]
 
 # Note: After installing, run this to patch paddlex for langchain compatibility:

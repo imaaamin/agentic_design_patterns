@@ -1,7 +1,8 @@
 # Code Quality Crew with Goal Setting and Monitoring Pattern
-# uv add crewai litellm langfuse openinference-instrumentation-crewai
+# uv add crewai litellm langfuse
 
 import os
+import uuid
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process, LLM
 from crewai.tools import tool
@@ -13,37 +14,73 @@ from datetime import datetime
 # Load environment variables
 load_dotenv()
 
+# --- Session Management ---
+# Sessions group related traces together in Langfuse
+# Set LANGFUSE_SESSION_ID in .env to reuse the same session across runs
+# Set LANGFUSE_USER_ID to track by user
+DEFAULT_USER_ID = os.getenv("LANGFUSE_USER_ID", "default-user")
+DEFAULT_SESSION_ID = os.getenv("LANGFUSE_SESSION_ID")  # None if not set
+
+
+def get_or_generate_session_id(prefix: str = "crew") -> str:
+    """Get session ID from env or generate a new one."""
+    if DEFAULT_SESSION_ID:
+        return DEFAULT_SESSION_ID
+    # Generate a unique session ID
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    short_uuid = str(uuid.uuid4())[:8]
+    return f"{prefix}-{timestamp}-{short_uuid}"
+
 # --- Langfuse Observability Setup ---
 # Set these in your .env file:
+# LANGFUSE_ENABLED=1
 # LANGFUSE_PUBLIC_KEY=your_public_key
 # LANGFUSE_SECRET_KEY=your_secret_key
-# LANGFUSE_HOST=https://cloud.langfuse.com (or your self-hosted URL)
+# LANGFUSE_HOST=http://localhost:3000 (or https://cloud.langfuse.com)
 
-LANGFUSE_ENABLED = bool(os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"))
+# Check if Langfuse is configured
+LANGFUSE_ENABLED = os.getenv("LANGFUSE_ENABLED") == "1" and bool(
+    os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY")
+)
+
+langfuse_client = None
 
 if LANGFUSE_ENABLED:
     try:
-        from langfuse import get_client
+        from langfuse import Langfuse
         from openinference.instrumentation.crewai import CrewAIInstrumentor
+        from openinference.instrumentation.litellm import LiteLLMInstrumentor
+        
+        langfuse_host = os.getenv("LANGFUSE_HOST", "http://localhost:3000")
         
         # Initialize Langfuse client
-        langfuse_client = get_client()
+        langfuse_client = Langfuse(
+            public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+            secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+            host=langfuse_host,
+        )
         
-        # Check authentication
+        # Verify connection
         if langfuse_client.auth_check():
-            print("✅ Langfuse: Connected and authenticated!")
-            # Instrument CrewAI to automatically capture traces
+            print(f"✅ Langfuse: Connected to {langfuse_host}")
+            
+            # Initialize OpenInference instrumentation for hierarchical traces
             CrewAIInstrumentor().instrument(skip_dep_check=True)
+            LiteLLMInstrumentor().instrument()
+            print("   Hierarchical tracing enabled via OpenInference instrumentation")
         else:
-            print("⚠️ Langfuse: Authentication failed. Running without observability.")
+            print("⚠️ Langfuse: Auth check failed - check your credentials")
             LANGFUSE_ENABLED = False
-    except ImportError:
-        print("⚠️ Langfuse packages not installed. Run: uv add langfuse openinference-instrumentation-crewai")
+        
+    except ImportError as e:
+        print(f"⚠️ Missing packages: {e}")
+        print("   Run: uv add langfuse openinference-instrumentation-crewai openinference-instrumentation-litellm")
         LANGFUSE_ENABLED = False
-        langfuse_client = None
+    except Exception as e:
+        print(f"⚠️ Langfuse setup error: {e}")
+        LANGFUSE_ENABLED = False
 else:
-    print("ℹ️ Langfuse: Not configured. Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env for observability.")
-    langfuse_client = None
+    print("ℹ️ Langfuse: Not configured. Set LANGFUSE_ENABLED=1, LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env")
 
 # --- Configure Logging ---
 logging.basicConfig(
@@ -200,7 +237,7 @@ def quality_check(code: str, check_type: str) -> str:
 # AGENT DEFINITIONS
 # =============================================================================
 
-# 1. The Prompt Refiner Agent (uses Gemini for nuanced understanding)
+# 1. The Prompt Refiner Agent (uses Groq for fast, reliable inference)
 prompt_refiner = Agent(
     role='Prompt Refiner & Goal Setter',
     goal='Transform user requirements into clear, actionable coding goals with specific acceptance criteria. Ensure all requirements are captured and refined for optimal AI interaction.',
@@ -213,7 +250,7 @@ prompt_refiner = Agent(
     verbose=True,
     allow_delegation=True,
     tools=[set_coding_goal, get_goal_status],
-    llm=gemini_llm,  # Gemini for nuanced requirement understanding
+    llm=groq_llm,  # Groq for reliable tool handling
 )
 
 # 2. The Peer Programmer Agent
@@ -276,7 +313,7 @@ test_writer = Agent(
     llm=groq_llm,
 )
 
-# 6. The Project Monitor Agent (Orchestrator - uses Gemini for holistic oversight)
+# 6. The Project Monitor Agent (Orchestrator - uses Groq for reliable tool handling)
 project_monitor = Agent(
     role='Project Monitor & Quality Gate',
     goal='Monitor overall progress, ensure all goals are met, coordinate between agents, and provide final quality assessment.',
@@ -288,7 +325,7 @@ project_monitor = Agent(
     verbose=True,
     allow_delegation=True,
     tools=[get_goal_status, update_progress],
-    llm=gemini_llm,  # Gemini for holistic project oversight
+    llm=groq_llm,  # Groq for reliable tool handling (Gemini had empty response issues)
 )
 
 
@@ -343,15 +380,20 @@ def create_tasks(user_request: str, use_case: str):
         6. Update progress using the Progress Update Tool as you work
         7. Run quality checks on your code
         
-        Focus on writing production-ready code.
+        IMPORTANT: Your final answer MUST include the complete code in a Python code block.
         """,
         expected_output="""
-        Complete, working code that includes:
-        - All required functions/classes
-        - Proper error handling
-        - Clean code structure
-        - Brief inline comments explaining complex parts
-        - Code that meets all acceptance criteria
+        The complete Python code implementation in a code block:
+        
+        ```python
+        # Complete implementation with:
+        # - All required functions/classes
+        # - Proper error handling
+        # - Docstrings and inline comments
+        # - Production-ready quality
+        ```
+        
+        Include a brief explanation of how the code works.
         """,
         agent=peer_programmer,
         context=[refine_and_set_goals_task],
@@ -434,15 +476,22 @@ def create_tasks(user_request: str, use_case: str):
         5. Run quality checks on test code
         6. Update progress using the Progress Update Tool
         
-        Aim for meaningful test coverage, not just high numbers.
+        IMPORTANT: Your final answer MUST include the complete test code in a Python code block.
         """,
         expected_output="""
-        Complete test suite including:
-        - Unit tests for all functions/methods
-        - Edge case tests
-        - Test documentation explaining what each test verifies
-        - Instructions for running the tests
-        - Expected test coverage summary
+        The complete test suite in a code block:
+        
+        ```python
+        import unittest
+        # or import pytest
+        
+        # Complete test implementation with:
+        # - Unit tests for all functions
+        # - Edge case tests
+        # - Clear test names
+        ```
+        
+        Brief instructions for running the tests (e.g., pytest or python -m unittest).
         """,
         agent=test_writer,
         context=[write_code_task, review_code_task],
@@ -456,26 +505,36 @@ def create_tasks(user_request: str, use_case: str):
         Your responsibilities:
         1. Review the overall goal status using the Status Report Tool
         2. Ensure all goals are marked as completed
-        3. Verify all deliverables are present:
-           - Working code
-           - Documentation
-           - Tests
+        3. Verify all deliverables are present in the context from previous tasks
         4. Create a final summary report
-        5. Identify any remaining issues or future improvements
-        6. Provide the final assembled deliverable
+        5. IMPORTANT: You MUST copy and include the COMPLETE code, documentation, and tests 
+           from the context into your final answer. Do not summarize - include the full code.
         
         This is the quality gate - nothing ships without your approval.
+        Your final answer MUST contain the actual code, not just a summary.
         """,
         expected_output="""
-        Final project report including:
-        - Summary of all completed goals
-        - Quality assessment score
-        - Complete assembled deliverable with:
-          * Final code
-          * Documentation
-          * Test suite
-        - Any recommendations for future improvements
-        - Final approval status: SHIP IT or HOLD
+        A complete final deliverable that includes:
+        
+        ## Summary
+        - Brief summary of completed goals
+        - Quality assessment: SHIP IT or HOLD
+        
+        ## Code (REQUIRED - include the full implementation)
+        ```python
+        # The complete code from the Peer Programmer
+        ```
+        
+        ## Documentation (REQUIRED - include the full docs)
+        The complete documentation from the Documenter
+        
+        ## Tests (REQUIRED - include the full test suite)
+        ```python
+        # The complete tests from the Test Writer
+        ```
+        
+        ## Recommendations
+        Any future improvements suggested
         """,
         agent=project_monitor,
         context=[write_code_task, review_code_task, write_documentation_task, write_tests_task],
@@ -521,8 +580,7 @@ def create_code_quality_crew(user_request: str, use_case: str) -> Crew:
         process=Process.sequential,  # Tasks execute in order
         verbose=True,
         memory=True,  # Enable memory for context retention
-        planning=True,  # Enable planning for better task coordination
-        planning_llm=groq_llm,  # Use Groq for planning (better JSON handling than Gemini)
+        planning=False,  # Disabled - sequential process + task contexts already coordinate workflow
         # Use Google Generative AI embeddings for memory (avoids OpenAI embeddings requirement)
         embedder={
             "provider": "google-generativeai",
@@ -578,19 +636,25 @@ def main():
     print("\n🏃 Starting Crew Execution...")
     print("-" * 60)
     
-    # Run with Langfuse observability if enabled
+    # Execute crew with Langfuse tracing if enabled
     if LANGFUSE_ENABLED and langfuse_client:
-        with langfuse_client.start_as_current_observation(
-            as_type="span", 
-            name="code-quality-crew-execution",
-            metadata={
-                "user_request": user_request[:200],
-                "use_case": use_case[:200],
-            }
-        ):
+        session_id = get_or_generate_session_id("code-quality")
+        print(f"📊 Langfuse Session: {session_id}")
+        
+        # Create outer span with input/output - instrumentation creates nested child spans
+        with langfuse_client.start_as_current_span(
+            name="code-quality-crew",
+            input={"request": user_request, "use_case": use_case},
+        ) as span:
+            # Set session and user on the trace
+            span.update_trace(session_id=session_id, user_id=DEFAULT_USER_ID)
+            
             result = crew.kickoff()
+            
+            span.update(output={"final_result": str(result), "goals": goal_tracker.get_status_report()})
+        
         langfuse_client.flush()
-        print("\n📡 Traces sent to Langfuse!")
+        print(f"\n📡 Traces sent to Langfuse!")
     else:
         result = crew.kickoff()
     
@@ -644,19 +708,25 @@ def interactive_mode():
     print("\n🏃 Starting Crew Execution...")
     print("-" * 60)
     
-    # Run with Langfuse observability if enabled
+    # Execute crew with Langfuse tracing if enabled
     if LANGFUSE_ENABLED and langfuse_client:
-        with langfuse_client.start_as_current_observation(
-            as_type="span", 
-            name="code-quality-crew-interactive",
-            metadata={
-                "user_request": user_request[:200],
-                "use_case": use_case[:200],
-            }
-        ):
+        session_id = get_or_generate_session_id("interactive")
+        print(f"📊 Langfuse Session: {session_id}")
+        
+        # Create outer span with input/output - instrumentation creates nested child spans
+        with langfuse_client.start_as_current_span(
+            name="interactive-crew",
+            input={"request": user_request, "use_case": use_case},
+        ) as span:
+            # Set session and user on the trace
+            span.update_trace(session_id=session_id, user_id=DEFAULT_USER_ID)
+            
             result = crew.kickoff()
+            
+            span.update(output={"final_result": str(result), "goals": goal_tracker.get_status_report()})
+        
         langfuse_client.flush()
-        print("\n📡 Traces sent to Langfuse!")
+        print(f"\n📡 Traces sent to Langfuse!")
     else:
         result = crew.kickoff()
     
