@@ -2,14 +2,20 @@
 # uv add crewai litellm langfuse
 
 import os
+import sys
 import uuid
-from dotenv import load_dotenv
-from crewai import Agent, Task, Crew, Process, LLM
-from crewai.tools import tool
-from pydantic import BaseModel, Field
-from typing import Optional, List
 import logging
 from datetime import datetime
+from dotenv import load_dotenv
+from crewai import Agent, Task, Crew, Process, LLM
+
+# Import goal tracking from local module
+from .goal_tracker import (
+    GoalTracker,
+    create_goal_tools,
+    get_default_tracker,
+    reset_default_tracker,
+)
 
 # Load environment variables
 load_dotenv()
@@ -30,6 +36,7 @@ def get_or_generate_session_id(prefix: str = "crew") -> str:
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     short_uuid = str(uuid.uuid4())[:8]
     return f"{prefix}-{timestamp}-{short_uuid}"
+
 
 # --- Langfuse Observability Setup ---
 # Set these in your .env file:
@@ -95,11 +102,11 @@ gemini_api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 
 if not groq_api_key:
     print("❌ Error: GROQ_API_KEY not found in .env")
-    exit(1)
+    sys.exit(1)
 
 if not gemini_api_key:
     print("❌ Error: GOOGLE_API_KEY or GEMINI_API_KEY not found in .env")
-    exit(1)
+    sys.exit(1)
 
 # Configure Groq LLM for CrewAI (fast inference)
 groq_llm = LLM(
@@ -115,122 +122,14 @@ gemini_llm = LLM(
 
 
 # =============================================================================
-# GOAL SETTING & MONITORING TOOLS
+# GOAL TRACKER INSTANCE & TOOLS
 # =============================================================================
 
-class Goal(BaseModel):
-    """Represents a coding goal with tracking information."""
-    id: str
-    description: str
-    acceptance_criteria: List[str]
-    status: str = "pending"  # pending, in_progress, completed, needs_revision
-    progress_notes: List[str] = Field(default_factory=list)
-
-
-class GoalTracker:
-    """Simple goal tracker to monitor progress across agents."""
-    def __init__(self):
-        self.goals: List[Goal] = []
-        self.iteration_count = 0
-        self.max_iterations = 3
-        
-    def add_goal(self, goal: Goal):
-        self.goals.append(goal)
-        logger.info(f"📌 Goal added: {goal.description}")
-        
-    def update_goal_status(self, goal_id: str, status: str, note: str = ""):
-        for goal in self.goals:
-            if goal.id == goal_id:
-                goal.status = status
-                if note:
-                    goal.progress_notes.append(f"[{datetime.now().strftime('%H:%M:%S')}] {note}")
-                logger.info(f"📊 Goal '{goal_id}' updated to: {status}")
-                return True
-        return False
-    
-    def get_status_report(self) -> str:
-        report = "\n=== GOAL STATUS REPORT ===\n"
-        for goal in self.goals:
-            report += f"\n🎯 {goal.id}: {goal.description}\n"
-            report += f"   Status: {goal.status}\n"
-            report += f"   Criteria: {', '.join(goal.acceptance_criteria)}\n"
-            if goal.progress_notes:
-                report += f"   Notes:\n"
-                for note in goal.progress_notes:
-                    report += f"      - {note}\n"
-        return report
-
-
-# Global tracker instance
+# Create a goal tracker for this session
 goal_tracker = GoalTracker()
 
-
-@tool("Goal Setting Tool")
-def set_coding_goal(goal_id: str, description: str, criteria: str) -> str:
-    """
-    Sets a new coding goal with acceptance criteria.
-    Args:
-        goal_id: Unique identifier for the goal (e.g., 'CODE_001')
-        description: Clear description of what needs to be achieved
-        criteria: Comma-separated list of acceptance criteria
-    Returns:
-        Confirmation message with goal details
-    """
-    criteria_list = [c.strip() for c in criteria.split(",")]
-    goal = Goal(
-        id=goal_id,
-        description=description,
-        acceptance_criteria=criteria_list
-    )
-    goal_tracker.add_goal(goal)
-    return f"✅ Goal '{goal_id}' set successfully with {len(criteria_list)} acceptance criteria."
-
-
-@tool("Progress Update Tool")
-def update_progress(goal_id: str, status: str, notes: str) -> str:
-    """
-    Updates the progress of a coding goal.
-    Args:
-        goal_id: The ID of the goal to update
-        status: New status (pending, in_progress, completed, needs_revision)
-        notes: Progress notes or comments
-    Returns:
-        Confirmation of the update
-    """
-    success = goal_tracker.update_goal_status(goal_id, status, notes)
-    if success:
-        return f"✅ Goal '{goal_id}' updated to '{status}'. Note recorded."
-    return f"❌ Goal '{goal_id}' not found."
-
-
-@tool("Status Report Tool")
-def get_goal_status() -> str:
-    """
-    Retrieves the current status of all coding goals.
-    Returns:
-        A formatted report of all goals and their status
-    """
-    return goal_tracker.get_status_report()
-
-
-@tool("Quality Check Tool")
-def quality_check(code: str, check_type: str) -> str:
-    """
-    Performs a quality check on code.
-    Args:
-        code: The code to check (or description of code)
-        check_type: Type of check (syntax, logic, style, security)
-    Returns:
-        Quality assessment result
-    """
-    # In production, this could integrate with actual linters/analyzers
-    checks = {
-        "syntax": "✅ Syntax check: Code structure appears valid",
-        "logic": "✅ Logic check: Control flow and logic reviewed",
-        "style": "✅ Style check: Code follows consistent formatting",
-        "security": "✅ Security check: No obvious vulnerabilities detected"
-    }
-    return checks.get(check_type.lower(), f"⚠️ Unknown check type: {check_type}")
+# Create tools bound to this tracker
+set_coding_goal, update_progress, get_goal_status, quality_check = create_goal_tools(goal_tracker)
 
 
 # =============================================================================
@@ -742,8 +641,6 @@ def interactive_mode():
 
 
 if __name__ == "__main__":
-    import sys
-    
     if len(sys.argv) > 1 and sys.argv[1] == "--interactive":
         interactive_mode()
     else:
