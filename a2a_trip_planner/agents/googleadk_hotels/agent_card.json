@@ -1,0 +1,28 @@
+{
+  "name": "Google ADK Hotel Search Agent",
+  "description": "Specializes in finding the best hotel accommodations. Uses Google ADK framework to search, filter, and recommend hotels based on location, budget, and amenities.",
+  "url": "http://localhost:8002",
+  "version": "1.0.0",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "defaultInputModes": ["text", "data"],
+  "defaultOutputModes": ["text", "data"],
+  "skills": [
+    {
+      "id": "find_hotels",
+      "name": "Hotel Search",
+      "description": "Search for hotels in a given location with optional filters for budget, rating, and required amenities.",
+      "tags": ["travel", "hotels", "accommodation"],
+      "examples": [
+        "Find hotels in Paris from June 15-22, 2026",
+        "Search for 4-star hotels with WiFi and breakfast under $200/night"
+      ]
+    }
+  ],
+  "authentication": {
+    "schemes": ["none"]
+  }
+}

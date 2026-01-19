@@ -1,0 +1,28 @@
+{
+  "name": "CrewAI Flight Search Agent",
+  "description": "Specializes in finding the best flight options for trips. Uses CrewAI framework to analyze routes, prices, and preferences to recommend optimal flights.",
+  "url": "http://localhost:8003",
+  "version": "1.0.0",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "defaultInputModes": ["text", "data"],
+  "defaultOutputModes": ["text", "data"],
+  "skills": [
+    {
+      "id": "find_flights",
+      "name": "Flight Search",
+      "description": "Search for flights between two cities on specific dates with optional filters for budget, stops, and airline preferences.",
+      "tags": ["travel", "flights", "booking"],
+      "examples": [
+        "Find flights from New York to Paris on June 15, 2026",
+        "Search for non-stop flights to London under $800"
+      ]
+    }
+  ],
+  "authentication": {
+    "schemes": ["none"]
+  }
+}

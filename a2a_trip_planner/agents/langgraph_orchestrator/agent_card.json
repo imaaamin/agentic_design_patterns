@@ -1,0 +1,28 @@
+{
+  "name": "Trip Planner Orchestrator",
+  "description": "Client-facing trip planning coordinator. Receives travel requests, discovers and coordinates specialist agents (flights, hotels), and provides comprehensive trip recommendations.",
+  "url": "http://localhost:8001",
+  "version": "1.0.0",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": true
+  },
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text", "data"],
+  "skills": [
+    {
+      "id": "plan_trip",
+      "name": "Trip Planning",
+      "description": "Plan a complete trip including flights and hotels by coordinating with specialist agents.",
+      "tags": ["travel", "planning", "orchestration"],
+      "examples": [
+        "Plan a trip from New York to Paris from June 15-22, 2026",
+        "I want to visit Tokyo next month with a budget of $2000"
+      ]
+    }
+  ],
+  "authentication": {
+    "schemes": ["none"]
+  }
+}
