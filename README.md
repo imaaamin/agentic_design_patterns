@@ -25,6 +25,7 @@ Each pattern is implemented using two frameworks for comparison:
 | **Routing** | Dynamically routes requests to specialized agents based on intent | `routing_googleadk.py` | `routing_langchain.py` |
 | **Parallelization** | Executes multiple agents concurrently for faster results | `parallelization_googleadk.py` | `parallelization_langchain.py` |
 | **Reflection** | Iterative self-improvement through generate-critique loops | `reflection_googleadk.py` | `reflection_langchain.py` |
+| **Resource Optimization** | Routes queries to appropriate models based on complexity (cost optimization) | `resource_optimization_googleadk.py` | - |
 | **Chaining** | Sequential processing where output flows to the next step | `chaining.py` | - |
 | **Peer Review (MCP)** | Document analysis with Docling MCP + dynamic tool discovery | - | `peer_review_docling_mcp.py` |
 | **Peer Review (Direct)** | Document analysis with direct Docling + multimodal support | - | `peer_review_docling_langgraph.py` |
@@ -53,13 +54,29 @@ Iteratively improves output through self-critique:
 Generator → Critic → (if not approved) → Generator → Critic → ... → Final Output
 ```
 
-### 4. Chaining Pattern
+### 4. Resource Optimization Pattern
+Routes queries to appropriate models based on complexity to optimize costs:
+```
+User Query → Complexity Analyzer → [Simple Query Agent (Flash) | Complex Query Agent (Pro)]
+```
+
+**Key Benefits:**
+- **Cost Optimization**: Uses faster, cheaper models (Gemini Flash) for simple queries
+- **Quality Assurance**: Uses more capable models (Gemini Pro) only when needed for complex reasoning
+- **Automatic Routing**: Analyzes query complexity and routes automatically
+
+**Use Cases:**
+- High-volume query systems where cost matters
+- Applications with mixed query complexity
+- Systems needing to balance cost and quality
+
+### 5. Chaining Pattern
 Passes output sequentially through a pipeline of agents:
 ```
 Agent 1 → Agent 2 → Agent 3 → Final Output
 ```
 
-### 5. Peer Review Pattern (Reflection + MCP)
+### 6. Peer Review Pattern (Reflection + MCP)
 Combines the Reflection pattern with document processing for automated peer review of research papers:
 
 ```
@@ -240,6 +257,7 @@ uv add langchain-mcp-adapters mcp
 uv run routing_googleadk.py
 uv run parallelization_langchain.py
 uv run reflection_googleadk.py
+uv run resource_optimization_googleadk.py
 
 # Peer Review (Direct mode - recommended)
 uv run peer_review_docling_langgraph.py paper.pdf
